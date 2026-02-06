@@ -1,0 +1,54 @@
+User Home: C:\Users\jashu
+OneDrive Path: C:\Users\jashu\OneDrive
+OneDrive Exists: True
+
+Checking Path: C:\Users\jashu
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 66
+  Sample: .antigravity
+
+Checking Path: C:\Users\jashu\Desktop
+  Exists: False
+
+Checking Path: C:\Users\jashu\Documents
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 4
+  Sample: c_programming
+
+Checking Path: C:\Users\jashu\Downloads
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 180
+  Sample: 1. Experiential Learning Phase -1 Template 27 April 2025.pptx
+
+Checking Path: C:\Users\jashu\OneDrive
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 6
+  Sample: .849C9593-D756-4E56-8D6E-42412F2A707B
+
+Checking Path: C:\Users\jashu\OneDrive\Desktop
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 71
+  Sample: 5. CS II YEAR 2022 SCHEME & SYLLABUS 29 NOV 2024_compressed.pdf
+
+Checking Path: C:\Users\jashu\OneDrive\Documents
+  Exists: True
+  Is Dir: True
+  Is Link: False
+  Entries Count: 35
+  Sample: 4. EL report content.docx
+
+Normalization Tests:
+Original: C:\Users\jashu\Documents
+Abspath: C:\Users\jashu\Documents
+Realpath: C:\Users\jashu\Documents
+Casefolded: c:\users\jashu\documents
