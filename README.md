@@ -848,4 +848,149 @@ Perfect for:
 
 ---
 
+# AI-ML Model & Security Architecture Documentation
+
+## 1. Executive Summary
+
+This document provides a comprehensive technical breakdown of the Artificial Intelligence (AI), Machine Learning (ML), and Cryptographic security mechanisms implemented in the **OS-EL Smart Immutable Ledger Audited Virtual File System** (CryptoFS++).
+
+The system employs a multi-layered approach to data security and privacy:
+1.  **Intelligent Content Analysis**: Automated scanning of files for Personally Identifiable Information (PII) and sensitive content using NLP and Computer Vision.
+2.  **Military-Grade Encryption**: AES-256 encryption with unique per-file key derivation.
+3.  **Biometric & Object Detection**: specialized models for face detection and document verification.
+
+---
+
+## 2. File Content Analysis Engine
+
+The file analysis engine is orchestrated by the `ContentAnalysisService`, which delegates tasks to specialized analyzers based on the file MIME type.
+
+### 2.1 Text Analysis Architecture
+
+**Component**: `TextAnalyzer` (`backend/app/ai/text_analyzer.py`)
+
+The text analysis module utilizes a hybrid approach combining **Regular Expression (Regex) Pattern Matching** and **Heuristic Entropy Analysis** to identify sensitive information with high precision.
+
+#### 2.1.1 Pattern-Based Detection
+The system scans for specific PII entities using optimized regex patterns. Each pattern is assigned a confidence score:
+
+| Entity Type | Methodology | Confidence Score |
+| :--- | :--- | :--- |
+| **Aadhaar Card** | 12-digit pattern (`\d{4}\s?\d{4}\s?\d{4}`) | 0.85 |
+| **PAN Card** | Alphanumeric (5 letters, 4 digits, 1 letter) | 0.90 |
+| **SSN** | US Social Security Number format | 0.90 |
+| **Credit Card** | 16-digit sequences with Luhn algorithm validation check | 0.80 |
+| **API Keys** | Keyword-prefixed high-entropy strings | 0.85 |
+| **Medical Data** | Semantic keyword matching (e.g., "diagnosis", "prescription") | 0.70 |
+
+#### 2.1.2 High-Entropy Credential Detection
+To detect undefined secrets (like random access tokens or passwords), the system employs **Shannon Entropy** analysis.
+- **Algorithm**: `_is_high_entropy(text)`
+- **Logic**: It calculates the ratio of unique characters to string length. If a string (length > 32) has a high variation of characters (> 50% unique), it is flagged as a potential cryptographic secret or token.
+
+#### 2.1.3 Sensitivity Scoring
+A cumulative `sensitivity_score` (0-100) is calculated based on weighted detections.
+- **Critical Weights**: API Keys, Passwords (30 points)
+- **High Weights**: Aadhaar, SSN (25 points)
+- **Medium Weights**: Medical terms (20 points)
+- **Classification**:
+    - **CRITICAL**: Score ≥ 81
+    - **HIGH**: Score ≥ 61
+    - **MEDIUM**: Score ≥ 31
+    - **LOW**: Score < 31
+
+---
+
+### 2.2 Image Analysis & Computer Vision
+
+**Component**: `ImageAnalyzer` (`backend/app/ai/image_analyzer.py`)
+
+The image analysis pipeline leverages **OpenCV** and **MediaPipe** to perform distinct computer vision tasks. The process involves decoding raw byte streams into NumPy arrays for processing.
+
+#### 2.2.1 Face Detection (Biometric Screening)
+The system determines the presence of human faces to flag potentially private photos or biometric data.
+
+*   **Primary Engine**: **MediaPipe Face Detection**
+    *   **Technology**: Google's BlazeFace model (lightweight, sub-millisecond inference).
+    *   **Implementation**: `mp.solutions.face_detection`
+    *   **Accuracy**: High resistance to rotation, scale, and lighting variations.
+    *   **Output**: Bounding box coordinates and confidence scores for each face.
+
+*   **Fallback Engine**: **OpenCV Haar Cascades**
+    *   **Technology**: Traditional Viola-Jones object detection framework.
+    *   **Model**: `haarcascade_frontalface_default.xml`
+    *   **Usage**: Automatically triggered if MediaPipe fails or is unavailable.
+
+#### 2.2.2 ID Card & Document Detection
+Uses geometric shape analysis to detect ID cards (drivers licenses, national IDs).
+1.  **Preprocessing**: Grayscale conversion + Canny Edge Detection (`cv2.Canny`).
+2.  **Contour Analysis**: `cv2.findContours` identifies structural outlines.
+3.  **Polygon Approximation**: `cv2.approxPolyDP` simplifies contours to checks for 4-sided shapes (rectangles) that occupy a significant portion (>10%) of the image area.
+
+#### 2.2.3 Sensitive Screenshot Detection
+Detects screenshots containing OTPs or QR codes.
+- **QR Code Heuristic**: Analyzes contour hierarchy to find nested square patterns typical of QR position markers.
+- **OTP/Text Heuristic**: Calculates "Edge Density". High-frequency edge patterns (>15% density) indicate text-heavy images like chat screenshots or OTP notifications.
+
+---
+
+## 3. Encryption & Security Architecture
+
+The `EncryptionService` implements a **Zero-Knowledge-Proof-inspired** architecture where every file is encrypted with a unique, mathematically derived key.
+
+### 3.1 Cryptographic Primitives
+*   **Algorithm**: **AES-256-CBC** (Advanced Encryption Standard, 256-bit key, Cipher Block Chaining mode).
+*   **Library**: `cryptography` (Python package backed by OpenSSL).
+*   **Padding**: **PKCS7** (Public Key Cryptography Standards #7) to align data to 128-bit block boundaries.
+
+### 3.2 Key Management Lifecycle
+
+#### 3.2.1 Key Derivation (KDF)
+Keys are **never stored directly**. They are derived on-the-fly using **PBKDF2-HMAC-SHA256**. This ensures that even if the database is compromised, the encryption keys cannot be recovered without the Master Secret.
+
+**Derivation Formula**:
+```python
+Salt = SHA256(FileID + MasterSecret)[:16]
+Key  = PBKDF2(
+    Secret: MasterSecret,
+    Salt: Salt,
+    Algorithm: SHA256,
+    Iterations: 100,000,
+    Length: 32 bytes
+)
+```
+*   **Uniqueness**: The `FileID` in the salt ensures every file has a completely different encryption key, even if the content is identical.
+*   **Security**: 100,000 iterations make brute-force attacks computationally infeasible.
+
+### 3.3 The Encryption Process
+1.  **Input**: Raw file bytes.
+2.  **Key Gen**: Unique key derived for the file.
+3.  **IV Gen**: A cryptographically strong random 16-byte **Initialization Vector (IV)** is generated (`os.urandom(16)`).
+4.  **Encryption**:
+    *   Data is padded (PKCS7).
+    *   Data is encrypted using AES-256-CBC with the Key and IV.
+5.  **Packaging**: The IV is **prepended** to the encrypted ciphertext.
+    *   `Final_Output = IV + Ciphertext`
+6.  **Storage**: The blob is written to disk.
+
+### 3.4 The Decryption Process
+1.  **Extraction**: The system reads the first 16 bytes to retrieve the IV.
+2.  **Key Gen**: The unique key is re-derived using the `FileID` and Master Secret.
+3.  **Decryption**: AES-256-CBC decrypts the remaining bytes using the extracted IV and derived Key.
+4.  **Unpadding**: PKCS7 padding is removed to restore the original file content.
+
+---
+
+## 4. Technical Stack Summary
+
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Backend Framework** | FastAPI | High-performance async API |
+| **Computer Vision** | OpenCV (`cv2`) | Image processing, edge detection |
+| **Face AI** | MediaPipe | ML-based face detection |
+| **NLP/Text** | Regex + Custom Heuristics | PII and credential extraction |
+| **Encryption** | `cryptography` (OpenSSL) | AES-256 primitives |
+| **Key Derivation** | PBKDF2-HMAC-SHA256 | Secure key generation |
+
+
 *Last updated: January 2024*
